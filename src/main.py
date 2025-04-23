@@ -11,30 +11,40 @@ def search_videos():
     """Search for videos related to data engineering projects."""
     try:
         youtube = create_youtube_client()
-        
-        request = youtube.search().list(
-            part='snippet',
-            q=SEARCH_QUERY,
-            type='video',
-            maxResults=MAX_RESULTS,
-            relevanceLanguage='en',
-            order='relevance'
-        )
-        
-        response = request.execute()
-        
         videos = []
-        for item in response['items']:
-            video = {
-                'title': item['snippet']['title'],
-                'description': item['snippet']['description'],
-                'published_at': item['snippet']['publishedAt'],
-                'channel_title': item['snippet']['channelTitle'],
-                'video_id': item['id']['videoId'],
-                'video_url': f"https://www.youtube.com/watch?v={item['id']['videoId']}"
-            }
-            videos.append(video)
+        next_page_token = None
+        
+        while len(videos) < MAX_RESULTS:
+            request = youtube.search().list(
+                part='snippet',
+                q=SEARCH_QUERY,
+                type='video',
+                maxResults=min(50, MAX_RESULTS - len(videos)),  # Request up to 50 at a time
+                relevanceLanguage='en',
+                order='relevance',
+                pageToken=next_page_token
+            )
             
+            response = request.execute()
+            
+            for item in response['items']:
+                video = {
+                    'title': item['snippet']['title'],
+                    'description': item['snippet']['description'],
+                    'published_at': item['snippet']['publishedAt'],
+                    'channel_title': item['snippet']['channelTitle'],
+                    'video_id': item['id']['videoId'],
+                    'video_url': f"https://www.youtube.com/watch?v={item['id']['videoId']}"
+                }
+                videos.append(video)
+            
+            # Check if there are more pages
+            next_page_token = response.get('nextPageToken')
+            if not next_page_token or len(videos) >= MAX_RESULTS:
+                break
+            
+        # Trim to exact number if we got more than requested
+        videos = videos[:MAX_RESULTS]
         return pd.DataFrame(videos)
     
     except HttpError as e:
